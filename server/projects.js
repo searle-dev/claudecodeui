@@ -548,7 +548,16 @@ async function deleteProject(projectName) {
 
 // Add a project manually to the config (creates folders if they don't exist)
 async function addProjectManually(projectPath, displayName = null) {
-  const absolutePath = path.resolve(projectPath);
+  let absolutePath;
+  
+  // Handle relative paths using PROJECT_BASE_DIR
+  if (!path.isAbsolute(projectPath)) {
+    const baseDir = process.env.PROJECT_BASE_DIR || process.env.HOME || '/root';
+    absolutePath = path.resolve(baseDir, projectPath);
+    console.log(`Converting relative path '${projectPath}' to absolute path '${absolutePath}' using base directory '${baseDir}'`);
+  } else {
+    absolutePath = path.resolve(projectPath);
+  }
   
   try {
     // Check if the path exists

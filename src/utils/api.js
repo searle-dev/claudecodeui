@@ -63,6 +63,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ path }),
     }),
+  projectConfig: () => authenticatedFetch('/api/projects/config'),
   readFile: (projectName, filePath) =>
     authenticatedFetch(`/api/projects/${projectName}/file?filePath=${encodeURIComponent(filePath)}`),
   saveFile: (projectName, filePath, content) =>

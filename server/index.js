@@ -250,6 +250,19 @@ app.get('/api/projects', authenticateToken, async (req, res) => {
   }
 });
 
+// Get project configuration
+app.get('/api/projects/config', authenticateToken, async (req, res) => {
+  try {
+    const baseDir = process.env.PROJECT_BASE_DIR || process.env.HOME || '/root';
+    res.json({
+      baseDirectory: baseDir,
+      supportRelativePaths: true
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/projects/:projectName/sessions', authenticateToken, async (req, res) => {
   try {
     const { limit = 5, offset = 0 } = req.query;

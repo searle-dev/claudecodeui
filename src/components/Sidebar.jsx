@@ -66,6 +66,7 @@ function Sidebar({
   const [editingSession, setEditingSession] = useState(null);
   const [editingSessionName, setEditingSessionName] = useState('');
   const [generatingSummary, setGeneratingSummary] = useState({});
+  const [projectConfig, setProjectConfig] = useState(null);
 
   // Touch handler to prevent double-tap issues on iPad
   const handleTouchClick = (callback) => {
@@ -97,6 +98,22 @@ function Sidebar({
       setExpandedProjects(prev => new Set([...prev, selectedProject.name]));
     }
   }, [selectedSession, selectedProject]);
+
+  // Fetch project configuration on component mount
+  useEffect(() => {
+    const fetchProjectConfig = async () => {
+      try {
+        const response = await api.projectConfig();
+        if (response.ok) {
+          const config = await response.json();
+          setProjectConfig(config);
+        }
+      } catch (error) {
+        console.error('Error fetching project config:', error);
+      }
+    };
+    fetchProjectConfig();
+  }, []);
 
   // Mark sessions as loaded when projects come in
   useEffect(() => {
@@ -398,7 +415,9 @@ function Sidebar({
             <Input
               value={newProjectPath}
               onChange={(e) => setNewProjectPath(e.target.value)}
-              placeholder="/path/to/project or relative/path"
+              placeholder={projectConfig ? 
+                `Absolute path or relative to ${projectConfig.baseDirectory}` : 
+                "/path/to/project or relative/path"}
               className="text-sm focus:ring-2 focus:ring-primary/20"
               autoFocus
               onKeyDown={(e) => {
@@ -406,6 +425,11 @@ function Sidebar({
                 if (e.key === 'Escape') cancelNewProject();
               }}
             />
+            {projectConfig && (
+              <div className="text-xs text-muted-foreground">
+                Base directory: <span className="font-mono">{projectConfig.baseDirectory}</span>
+              </div>
+            )}
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -452,7 +476,9 @@ function Sidebar({
                 <Input
                   value={newProjectPath}
                   onChange={(e) => setNewProjectPath(e.target.value)}
-                  placeholder="/path/to/project or relative/path"
+                  placeholder={projectConfig ? 
+                `Absolute path or relative to ${projectConfig.baseDirectory}` : 
+                "/path/to/project or relative/path"}
                   className="text-sm h-10 rounded-md focus:border-primary transition-colors"
                   autoFocus
                   onKeyDown={(e) => {
@@ -460,6 +486,11 @@ function Sidebar({
                     if (e.key === 'Escape') cancelNewProject();
                   }}
                 />
+                {projectConfig && (
+                  <div className="text-xs text-muted-foreground">
+                    Base directory: <span className="font-mono">{projectConfig.baseDirectory}</span>
+                  </div>
+                )}
                 
                 <div className="flex gap-2">
                   <Button
