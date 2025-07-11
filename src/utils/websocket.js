@@ -21,42 +21,35 @@ export function useWebSocket() {
 
   const connect = async () => {
     try {
-      // Get authentication token
-      const token = localStorage.getItem('auth-token');
-      if (!token) {
-        console.warn('No authentication token found for WebSocket connection');
-        return;
-      }
+      // Determine WebSocket URL based on current environment
+      let wsUrl;
       
-      // Fetch server configuration to get the correct WebSocket URL
-      let wsBaseUrl;
-      try {
-        const configResponse = await fetch('/api/config', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        const config = await configResponse.json();
-        wsBaseUrl = config.wsUrl;
-        
-        // If the config returns localhost but we're not on localhost, use current host but with API server port
-        if (wsBaseUrl.includes('localhost') && !window.location.hostname.includes('localhost')) {
-          console.warn('Config returned localhost, using current host with API server port instead');
-          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          // For development, API server is typically on port 3002 when Vite is on 3001
-          const apiPort = window.location.port === '3001' ? '3002' : window.location.port;
-          wsBaseUrl = `${protocol}//${window.location.hostname}:${apiPort}`;
-        }
-      } catch (error) {
-        console.warn('Could not fetch server config, falling back to current host with API server port');
+      // Check if we're in production (domain name, not localhost)
+      const isProduction = !window.location.hostname.includes('localhost') && 
+                          !window.location.hostname.includes('127.0.0.1');
+      
+      if (isProduction) {
+        // In production, use the same domain with appropriate protocol
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        // For development, API server is typically on port 3002 when Vite is on 3001
-        const apiPort = window.location.port === '3001' ? '3002' : window.location.port;
-        wsBaseUrl = `${protocol}//${window.location.hostname}:${apiPort}`;
+        wsUrl = `${protocol}//${window.location.host}/ws`;
+        console.log('Production WebSocket URL:', wsUrl);
+      } else {
+        // In development, try to get server config first
+        try {
+          const configResponse = await fetch('/api/config');
+          const config = await configResponse.json();
+          wsUrl = `${config.wsUrl}/ws`;
+          console.log('Development WebSocket URL from config:', wsUrl);
+        } catch (error) {
+          console.warn('Could not fetch server config, using default development URL');
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const apiPort = window.location.port === '3001' ? '3002' : (window.location.port || '3008');
+          wsUrl = `${protocol}//${window.location.hostname}:${apiPort}/ws`;
+          console.log('Development WebSocket URL fallback:', wsUrl);
+        }
       }
       
-      // Include token in WebSocket URL as query parameter
-      const wsUrl = `${wsBaseUrl}/ws?token=${encodeURIComponent(token)}`;
+      console.log('Attempting WebSocket connection to:', wsUrl);
       const websocket = new WebSocket(wsUrl);
 
       websocket.onopen = () => {

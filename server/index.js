@@ -29,6 +29,8 @@ const { spawn } = require('child_process');
 const os = require('os');
 const pty = require('node-pty');
 const fetch = require('node-fetch');
+const session = require('express-session');
+const crypto = require('crypto');
 
 const { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } = require('./projects');
 const { spawnClaude, abortClaudeSession } = require('./claude-cli');
@@ -140,28 +142,72 @@ function getServerIP() {
 const app = express();
 const server = http.createServer(app);
 
+// Authentication configuration
+const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD || 'claude123';
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+
+// Session configuration
+app.use(session({
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: false, // Set to true in production with HTTPS
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Authentication middleware
+const requireAuth = (req, res, next) => {
+  if (req.session.authenticated) {
+    next();
+  } else {
+    res.status(401).json({ error: 'Authentication required' });
+  }
+};
+
 // Single WebSocket server that handles both paths
 const wss = new WebSocketServer({ 
   server,
   verifyClient: (info) => {
     console.log('WebSocket connection attempt to:', info.req.url);
     
-    // Extract token from query parameters or headers
+    // Try JWT token authentication first
     const url = new URL(info.req.url, 'http://localhost');
     const token = url.searchParams.get('token') || 
                   info.req.headers.authorization?.split(' ')[1];
     
-    // Verify token
-    const user = authenticateWebSocket(token);
-    if (!user) {
-      console.log('❌ WebSocket authentication failed');
-      return false;
+    if (token) {
+      // Verify JWT token
+      const user = authenticateWebSocket(token);
+      if (user) {
+        info.req.user = user;
+        console.log('✅ WebSocket authenticated for user:', user.username);
+        return true;
+      }
     }
     
-    // Store user info in the request for later use
-    info.req.user = user;
-    console.log('✅ WebSocket authenticated for user:', user.username);
-    return true;
+    // Fallback to session-based authentication
+    const cookies = {};
+    if (info.req.headers.cookie) {
+      info.req.headers.cookie.split(';').forEach(cookie => {
+        const [name, value] = cookie.trim().split('=');
+        if (name && value) {
+          cookies[name] = decodeURIComponent(value);
+        }
+      });
+    }
+    
+    // Check if user is authenticated via session
+    const sessionCookie = cookies['connect.sid'];
+    if (sessionCookie) {
+      console.log('✅ WebSocket authenticated via session');
+      return true;
+    }
+    
+    console.log('❌ WebSocket authentication failed');
+    return false;
   }
 });
 
