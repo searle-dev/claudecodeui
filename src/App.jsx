@@ -25,11 +25,10 @@ import MainContent from './components/MainContent';
 import MobileNav from './components/MobileNav';
 import ToolsSettings from './components/ToolsSettings';
 import QuickSettingsPanel from './components/QuickSettingsPanel';
-import Login from './components/Login';
 
 import { useWebSocket } from './utils/websocket';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useVersionCheck } from './hooks/useVersionCheck';
 import { api } from './utils/api';
@@ -39,13 +38,10 @@ import { api } from './utils/api';
 function AppContent() {
   const navigate = useNavigate();
   const { sessionId } = useParams();
+  const { user } = useAuth(); // Use auth context instead of local state
   
   const { updateAvailable, latestVersion, currentVersion } = useVersionCheck('siteboon', 'claudecodeui');
   const [showVersionModal, setShowVersionModal] = useState(false);
-  
-  // Authentication state
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
   
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -78,6 +74,30 @@ function AppContent() {
   const { ws, sendMessage, messages } = useWebSocket();
 
   useEffect(() => {
+    // Fetch projects only if authenticated
+    if (user) {
+      fetchProjects();
+    }
+  }, [user]);
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      setProjects([]);
+      setSelectedProject(null);
+      setSelectedSession(null);
+      navigate('/');
+      // AuthContext will handle the authentication state
+      window.location.reload(); // Refresh to reset auth context
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
+  useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
@@ -88,52 +108,6 @@ function AppContent() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Check authentication status on component mount
-  useEffect(() => {
-    checkAuthStatus();
-  }, []);
-
-  useEffect(() => {
-    // Fetch projects only if authenticated
-    if (isAuthenticated) {
-      fetchProjects();
-    }
-  }, [isAuthenticated]);
-
-  const checkAuthStatus = async () => {
-    try {
-      const response = await fetch('/api/auth/status', {
-        credentials: 'include',
-      });
-      const data = await response.json();
-      setIsAuthenticated(data.authenticated);
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      setIsAuthenticated(false);
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
-
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-  };
-
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-      setIsAuthenticated(false);
-      setProjects([]);
-      setSelectedProject(null);
-      setSelectedSession(null);
-      navigate('/');
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
-  };
 
   // Helper function to determine if an update is purely additive (new sessions/projects)
   // vs modifying existing selected items that would interfere with active conversations
@@ -539,19 +513,7 @@ function AppContent() {
     );
   };
 
-  // Show login screen if not authenticated
-  if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} isLoading={isAuthLoading} />;
-  }
 
-  // Show loading spinner while checking auth
-  if (isAuthLoading) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="fixed inset-0 flex bg-background">

@@ -37,7 +37,7 @@ export const AuthProvider = ({ children }) => {
       setIsLoading(true);
       setError(null);
       
-      // Check if system needs setup
+      // Check if system needs setup and authentication status
       const statusResponse = await api.auth.status();
       const statusData = await statusResponse.json();
       
@@ -47,7 +47,15 @@ export const AuthProvider = ({ children }) => {
         return;
       }
       
-      // If we have a token, verify it
+      // Check if authenticated via session (simple password auth)
+      if (statusData.authenticated) {
+        setUser({ id: 'session-user', username: 'user' }); // Simple user object for session auth
+        setNeedsSetup(false);
+        setIsLoading(false);
+        return;
+      }
+      
+      // If we have a token, verify it (JWT auth)
       if (token) {
         try {
           const userResponse = await api.auth.user();
@@ -85,9 +93,15 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (response.ok) {
-        setToken(data.token);
-        setUser(data.user);
-        localStorage.setItem('auth-token', data.token);
+        // Handle JWT token response (database user auth)
+        if (data.token && data.user) {
+          setToken(data.token);
+          setUser(data.user);
+          localStorage.setItem('auth-token', data.token);
+        } else {
+          // Handle session response (simple password auth)
+          setUser({ id: 'session-user', username: 'user' });
+        }
         return { success: true };
       } else {
         setError(data.error || 'Login failed');

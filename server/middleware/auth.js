@@ -18,8 +18,16 @@ const validateApiKey = (req, res, next) => {
   next();
 };
 
-// JWT authentication middleware
+// JWT authentication middleware (supports both JWT and session auth)
 const authenticateToken = async (req, res, next) => {
+  // First check for session authentication (simple password auth)
+  if (req.session && req.session.authenticated) {
+    // Create a mock user object for session auth
+    req.user = { id: 'session-user', username: 'user' };
+    return next();
+  }
+  
+  // Then check for JWT token authentication
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 

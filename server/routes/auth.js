@@ -9,9 +9,13 @@ const router = express.Router();
 router.get('/status', async (req, res) => {
   try {
     const hasUsers = await userDb.hasUsers();
+    
+    // Check if user is authenticated via session (simple password auth)
+    const isSessionAuthenticated = req.session.authenticated === true;
+    
     res.json({ 
       needsSetup: !hasUsers,
-      isAuthenticated: false // Will be overridden by frontend if token exists
+      authenticated: isSessionAuthenticated // Return actual authentication status
     });
   } catch (error) {
     console.error('Auth status error:', error);
@@ -73,7 +77,23 @@ router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     
-    // Validate input
+    // Handle simple password authentication (no username)
+    if (!username && password) {
+      const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD || 'claude123';
+      
+      if (password === ACCESS_PASSWORD) {
+        // Set session for simple password authentication
+        req.session.authenticated = true;
+        return res.json({
+          success: true,
+          message: 'Authentication successful'
+        });
+      } else {
+        return res.status(401).json({ error: 'Invalid password' });
+      }
+    }
+    
+    // Handle database user authentication (username + password)
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });
     }
@@ -115,8 +135,18 @@ router.get('/user', authenticateToken, (req, res) => {
   });
 });
 
-// Logout (client-side token removal, but this endpoint can be used for logging)
+// Logout (handles both JWT and session auth)
 router.post('/logout', authenticateToken, (req, res) => {
+  // Clear session if it exists
+  if (req.session) {
+    req.session.authenticated = false;
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destroy error:', err);
+      }
+    });
+  }
+  
   // In a simple JWT system, logout is mainly client-side
   // This endpoint exists for consistency and potential future logging
   res.json({ success: true, message: 'Logged out successfully' });
